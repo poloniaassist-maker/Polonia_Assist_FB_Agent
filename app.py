@@ -132,3 +132,49 @@ def analyze_post(data: PostInput):
         "agent_reply": reply,
         "source": knowledge["url"] if knowledge else None
     }
+from fastapi import Request
+import httpx
+
+VERIFY_TOKEN = os.getenv("FB_VERIFY_TOKEN")
+PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
+
+
+@app.get("/facebook/webhook")
+async def verify_facebook(request: Request):
+    params = request.query_params
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == VERIFY_TOKEN:
+        return int(params.get("hub.challenge"))
+    return {"status": "error", "message": "Invalid verification token"}
+
+
+@app.post("/facebook/webhook")
+async def facebook_webhook(request: Request):
+    data = await request.json()
+
+    # Facebook wysyła różne typy eventów — interesują nas komentarze
+    if "entry" in data:
+        for entry in data["entry"]:
+            if "changes" in entry:
+                for change in entry["changes"]:
+                    if change.get("field") == "feed":
+                        value = change.get("value", {})
+                        if value.get("item") == "comment" and "message" in value:
+                            comment_text = value["message"]
+                            comment_id = value["comment_id"]
+
+                            # Generujemy odpowiedź przez nasz endpoint analyze
+                            reply = generate_ai_reply(comment_text, search_knowledge(comment_text))
+
+                            # Wysyłamy odpowiedź na Facebooka
+                            await send_facebook_reply(comment_id, reply)
+
+    return {"status": "ok"}
+
+
+async def send_facebook_reply(comment_id: str, message: str):
+    url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    payload = {"message": message}
+
+    async with httpx.AsyncClient() as client:
+        await client.post(url, params=params, json=payload)
