@@ -1,88 +1,52 @@
-import requests
-from datetime import datetime, timedelta
-from config import FB_PAGE_ID, FB_PAGE_TOKEN
+from posts import get_recent_posts_without_pa_comment, send_comment
+from classifier import classify_post
+from generate_reply import generate_reply
+from anti_duplicate import already_replied, mark_as_replied, is_old_post
 
 
-def get_recent_posts_without_pa_comment():
-    """
-    Pobiera posty z FEEDU STRONY (FB_PAGE_ID):
-    - nie starsze niż 12 godzin
-    - bez komentarza Polonia Assist
-    - mogą pochodzić z grup, w których strona jest członkiem
-    """
+def run_agent_cycle():
+    print("=== START AGENTA POLONIA ASSIST (FEED STRONY) ===")
 
-    url = f"https://graph.facebook.com/v18.0/{FB_PAGE_ID}/feed"
-    params = {
-        "access_token": FB_PAGE_TOKEN,
-        "limit": 50,
-        "fields": "id,message,created_time,permalink_url,from"
-    }
+    posts = get_recent_posts_without_pa_comment()
+    print(f"Posty do obsługi: {len(posts)}")
 
-    response = requests.get(url, params=params)
-    data = response.json()
+    for post in posts:
+        message = post.get("message", "")
+        post_id = post.get("id")
+        permalink = post.get("permalink_url", "")
 
-    if "data" not in data:
-        print("Brak danych z feedu strony:", data)
-        return []
+        print("\n--- POST ---")
+        print("ID:", post_id)
+        print("Link:", permalink)
+        print("Treść:", message or "[brak treści]")
 
-    now = datetime.utcnow()
-    cutoff = now - timedelta(hours=12)
-
-    valid_posts = []
-
-    for post in data["data"]:
-        created_raw = post.get("created_time")
-        if not created_raw:
+        if not post_id:
+            print("Brak ID posta — pomijam.")
             continue
+
+        if already_replied(post_id):
+            print("Pomijam — już odpowiadaliśmy na ten post (anti_duplicate).")
+            continue
+
+        if is_old_post(post):
+            print("Pomijam — post starszy niż dopuszczalny limit.")
+            continue
+
+        classification = classify_post(message)
+        print("Klasyfikacja:", classification)
+
+        if not classification.get("should_reply", True):
+            print("Pomijam — should_reply = false")
+            continue
+
+        reply = generate_reply(classification, message)
+        print("Odpowiedź:", reply)
 
         try:
-            created = datetime.strptime(created_raw, "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
-        except Exception:
-            continue
+            send_comment(post_id, reply)
+            print("Komentarz wysłany.")
+            mark_as_replied(post_id)
+        except Exception as e:
+            print("Błąd przy wysyłaniu komentarza:", e)
 
-        if created < cutoff:
-            continue
-
-        # sprawdź, czy już komentowaliśmy ten post jako strona
-        comments_url = f"https://graph.facebook.com/v18.0/{post['id']}/comments"
-        comments_params = {
-            "access_token": FB_PAGE_TOKEN,
-            "filter": "stream",
-            "fields": "from"
-        }
-
-        comments_res = requests.get(comments_url, params=comments_params).json()
-
-        already_commented = False
-        if "data" in comments_res:
-            for c in comments_res["data"]:
-                if c.get("from", {}).get("id") == FB_PAGE_ID:
-                    already_commented = True
-                    break
-
-        if already_commented:
-            continue
-
-        valid_posts.append(post)
-
-    return valid_posts
-
-
-def send_comment(post_id, message):
-    """
-    Wysyła komentarz jako strona Polonia Assist NL.
-    """
-    url = f"https://graph.facebook.com/v18.0/{post_id}/comments"
-    payload = {
-        "message": message,
-        "access_token": FB_PAGE_TOKEN
-    }
-
-    response = requests.post(url, data=payload)
-    data = response.json()
-
-    if "error" in data:
-        raise Exception(data["error"])
-
-    return data
-
+    print("=== KONIEC CYKLU ===")
