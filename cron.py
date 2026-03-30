@@ -1,5 +1,7 @@
 from groups import get_page_groups
 from posts import get_recent_posts_without_pa_comment
+from classifier import classify_post
+
 
 def run_agent_cycle():
     print("=== START AGENTA POLONIA ASSIST ===")
