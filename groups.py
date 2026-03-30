@@ -1,30 +1,7 @@
-import requests
-import os
-
-FB_PAGE_ID = os.getenv("FB_PAGE_ID")
-FB_PAGE_TOKEN = os.getenv("FB_PAGE_TOKEN")
-
 def get_page_groups():
     """
-    Pobiera wszystkie grupy, do których należy strona Polonia Assist.
-    Automatycznie uwzględnia nowe grupy.
+    Placeholder – agent działa teraz na feedzie strony (FB_PAGE_ID),
+    więc ta funkcja nie jest używana.
+    Zostawiamy ją tylko po to, żeby nie psuła importów.
     """
-    url = f"https://graph.facebook.com/v18.0/{FB_PAGE_ID}/groups"
-    params = {
-        "access_token": FB_PAGE_TOKEN,
-        "limit": 100
-    }
-
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    groups = []
-
-    if "data" in data:
-        for g in data["data"]:
-            groups.append({
-                "id": g["id"],
-                "name": g.get("name", "Unknown Group")
-            })
-
-    return groups
+    return []
