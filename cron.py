@@ -4,19 +4,21 @@ from posts import get_recent_posts_without_pa_comment
 def run_agent_cycle():
     print("=== START AGENTA POLONIA ASSIST ===")
 
-    # 1. Pobierz wszystkie grupy strony
+    # 1. Pobierz wszystkie grupy
     groups = get_page_groups()
     print("Znalezione grupy:", groups)
 
-    # 2. Pobierz posty z każdej grupy
+    # 2. Przejdź przez każdą grupę
     for group in groups:
         print(f"\n--- Grupa: {group['name']} ---")
+
+        # 3. Pobierz posty z tej grupy (Moduł 3)
         posts = get_recent_posts_without_pa_comment(group["id"])
         print(f"Posty do obsługi: {len(posts)}")
 
+        # 4. Wyświetl posty (na razie tylko logi)
         for post in posts:
             print("Post:", post.get("message", "[brak treści]"))
-            # tutaj później dodamy Moduł 4, 5 i 6
 
     print("=== KONIEC CYKLU ===")
 
