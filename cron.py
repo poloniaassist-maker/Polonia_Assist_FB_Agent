@@ -39,7 +39,7 @@ def run_agent_cycle():
 
             # Wysyłanie komentarza
             try:
-                send_comment(post["id"], reply)
+                print("[DRY RUN] Komentarz NIE został wysłany.")
                 print("Komentarz wysłany.")
             except Exception as e:
                 print("Błąd przy wysyłaniu komentarza:", e)
