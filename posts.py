@@ -125,3 +125,23 @@ def get_recent_posts_without_pa_comment():
         valid_posts.append(post)
 
     return valid_posts
+import requests
+from config import FB_PAGE_TOKEN
+
+def send_comment(post_id, message):
+    """
+    Wysyła komentarz jako strona Polonia Assist NL.
+    """
+    url = f"https://graph.facebook.com/v18.0/{post_id}/comments"
+    payload = {
+        "message": message,
+        "access_token": FB_PAGE_TOKEN
+    }
+
+    response = requests.post(url, data=payload)
+    data = response.json()
+
+    if "error" in data:
+        raise Exception(data["error"])
+
+    return data
