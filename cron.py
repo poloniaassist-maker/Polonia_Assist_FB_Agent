@@ -26,4 +26,5 @@ def run_agent_cycle():
     print("=== KONIEC CYKLU ===")
 
 if __name__ == "__main__":
+   print("=== TEST DEPLOYU ===") 
     run_agent_cycle()
