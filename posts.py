@@ -62,3 +62,18 @@ def get_recent_posts_without_pa_comment(group_id):
             valid_posts.append(post)
 
     return valid_posts
+def send_comment(post_id, message):
+    """
+    Wysyła komentarz jako strona Polonia Assist.
+    """
+    url = f"https://graph.facebook.com/v18.0/{post_id}/comments"
+    params = {
+        "access_token": FB_PAGE_TOKEN,
+        "message": message
+    }
+
+    response = requests.post(url, params=params)
+    try:
+        return response.json()
+    except:
+        return {"error": "Invalid JSON response"}
