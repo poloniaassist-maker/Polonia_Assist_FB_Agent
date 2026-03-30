@@ -19,6 +19,9 @@ def run_agent_cycle():
         # 4. Wyświetl posty (na razie tylko logi)
         for post in posts:
             print("Post:", post.get("message", "[brak treści]"))
+                classification = classify_post(post.get("message", ""))
+    print("Klasyfikacja:", classification)
+
 
     print("=== KONIEC CYKLU ===")
 
