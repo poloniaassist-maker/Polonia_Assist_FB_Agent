@@ -69,11 +69,11 @@ def send_comment(post_id, message):
     url = f"https://graph.facebook.com/v18.0/{post_id}/comments"
     params = {
         "access_token": FB_PAGE_TOKEN,
-        "message": message
+        "message": message,
     }
 
     response = requests.post(url, params=params)
     try:
         return response.json()
-    except:
-        return {"error": "Invalid JSON response"}
+    except ValueError:
+        return {"error": "Invalid JSON response", "status_code": response.status_code, "text": response.text}
