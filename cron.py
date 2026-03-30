@@ -1,6 +1,7 @@
 from groups import get_page_groups
-from posts import get_recent_posts_without_pa_comment
+from posts import get_recent_posts_without_pa_comment, send_comment
 from classifier import classify_post
+from generate_reply import generate_reply
 
 
 def run_agent_cycle():
@@ -18,11 +19,30 @@ def run_agent_cycle():
         posts = get_recent_posts_without_pa_comment(group["id"])
         print(f"Posty do obsługi: {len(posts)}")
 
-        # 4. Wyświetl posty i klasyfikację
+        # 4. Przetwarzaj posty: klasyfikacja + odpowiedź + komentarz
         for post in posts:
-            print("Post:", post.get("message", "[brak treści]"))
-            classification = classify_post(post.get("message", ""))
+            message = post.get("message", "")
+            print("Post:", message or "[brak treści]")
+
+            # Klasyfikacja
+            classification = classify_post(message)
             print("Klasyfikacja:", classification)
+
+            # Jeśli klasyfikator mówi, że nie odpowiadamy → pomijamy
+            if not classification.get("should_reply", True):
+                print("Pomijam post — should_reply = false")
+                continue
+
+            # Generowanie odpowiedzi
+            reply = generate_reply(classification, message)
+            print("Odpowiedź:", reply)
+
+            # Wysyłanie komentarza
+            try:
+                send_comment(post["id"], reply)
+                print("Komentarz wysłany.")
+            except Exception as e:
+                print("Błąd przy wysyłaniu komentarza:", e)
 
     print("=== KONIEC CYKLU ===")
 
