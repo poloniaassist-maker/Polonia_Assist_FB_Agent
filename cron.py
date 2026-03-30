@@ -1,52 +1,53 @@
-from groups import get_page_groups
 from posts import get_recent_posts_without_pa_comment, send_comment
 from classifier import classify_post
 from generate_reply import generate_reply
+from anti_duplicate import already_replied, mark_as_replied, is_old_post
 
 
 def run_agent_cycle():
-    print("=== START AGENTA POLONIA ASSIST ===")
+    print("=== START AGENTA POLONIA ASSIST (FEED STRONY) ===")
 
-    # 1. Pobierz wszystkie grupy
-    groups = get_page_groups()
-    print("Znalezione grupy:", groups)
+    posts = get_recent_posts_without_pa_comment()
+    print(f"Posty do obsługi: {len(posts)}")
 
-    # 2. Przejdź przez każdą grupę
-    for group in groups:
-        print(f"\n--- Grupa: {group['name']} ---")
+    for post in posts:
+        message = post.get("message", "")
+        post_id = post.get("id")
+        permalink = post.get("permalink_url", "")
+        print("\n--- POST ---")
+        print("ID:", post_id)
+        print("Link:", permalink)
+        print("Treść:", message or "[brak treści]")
 
-        # 3. Pobierz posty z tej grupy
-        posts = get_recent_posts_without_pa_comment(group["id"])
-        print(f"Posty do obsługi: {len(posts)}")
+        if not post_id:
+            print("Brak ID posta — pomijam.")
+            continue
 
-        # 4. Przetwarzaj posty: klasyfikacja + odpowiedź + komentarz
-        for post in posts:
-            message = post.get("message", "")
-            print("Post:", message or "[brak treści]")
+        # FILTR 1 — czy już odpowiadaliśmy na ten post?
+        if already_replied(post_id):
+            print("Pomijam — już odpowiadaliśmy na ten post (anti_duplicate).")
+            continue
 
-            # Klasyfikacja
-            classification = classify_post(message)
-            print("Klasyfikacja:", classification)
+        # FILTR 2 — czy post jest stary?
+        if is_old_post(post):
+            print("Pomijam — post starszy niż dopuszczalny limit (anti_duplicate).")
+            continue
 
-            # Jeśli klasyfikator mówi, że nie odpowiadamy → pomijamy
-            if not classification.get("should_reply", True):
-                print("Pomijam post — should_reply = false")
-                continue
+        classification = classify_post(message)
+        print("Klasyfikacja:", classification)
 
-            # Generowanie odpowiedzi
-            reply = generate_reply(classification, message)
-            print("Odpowiedź:", reply)
+        if not classification.get("should_reply", True):
+            print("Pomijam post — should_reply = false")
+            continue
 
-            # Wysyłanie komentarza
-            try:
-                print("[DRY RUN] Komentarz NIE został wysłany.")
-                print("Komentarz wysłany.")
-            except Exception as e:
-                print("Błąd przy wysyłaniu komentarza:", e)
+        reply = generate_reply(classification, message)
+        print("Odpowiedź:", reply)
+
+        try:
+            send_comment(post_id, reply)
+            print("Komentarz wysłany.")
+            mark_as_replied(post_id)
+        except Exception as e:
+            print("Błąd przy wysyłaniu komentarza:", e)
 
     print("=== KONIEC CYKLU ===")
-
-
-if __name__ == "__main__":
-    print("=== TEST DEPLOYU ===")
-    run_agent_cycle()
