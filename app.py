@@ -182,6 +182,5 @@ from cron import run_agent_cycle
 
 @app.get("/test-cron")
 def test_cron():
-    print("=== TEST CRON ===")
     run_agent_cycle()
-    return {"status": "cron executed"}
+    return {"status": "agent executed"}
