@@ -5,6 +5,14 @@ import os
 
 app = FastAPI()
 
+@app.get("/webhook")
+async def verify_facebook_route(request: Request):
+    return await verify_facebook(request)
+
+@app.post("/webhook")
+async def facebook_webhook_route(request: Request):
+    return await facebook_webhook(request)
+
 # Klucz OpenAI z ENV (Render → Environment → OPENAI_API_KEY)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
