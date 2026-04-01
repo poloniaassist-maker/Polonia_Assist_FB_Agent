@@ -1,22 +1,25 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import openai
 import os
+import httpx
 
 app = FastAPI()
 
-@app.get("/webhook")
-async def verify_facebook_route(request: Request):
-    return await verify_facebook(request)
+# -----------------------------------
+# KONFIGURACJA FACEBOOKA
+# -----------------------------------
+VERIFY_TOKEN = os.getenv("FB_VERIFY_TOKEN")
+PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
 
-@app.post("/webhook")
-async def facebook_webhook_route(request: Request):
-    return await facebook_webhook(request)
-
-# Klucz OpenAI z ENV (Render → Environment → OPENAI_API_KEY)
+# -----------------------------------
+# KONFIGURACJA OPENAI
+# -----------------------------------
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-
+# -----------------------------------
+# STRONA GŁÓWNA
+# -----------------------------------
 @app.get("/")
 def home():
     return {
@@ -24,12 +27,9 @@ def home():
         "message": "Polonia Assist Agent działa z OpenAI"
     }
 
-
-# -------------------------
-# BAZA WIEDZY POLONIA ASSIST
-# -------------------------
-# Możesz ją dowolnie rozszerzać.
-# Agent korzysta TYLKO z tych danych.
+# -----------------------------------
+# BAZA WIEDZY
+# -----------------------------------
 knowledge_base = {
     "umowa": {
         "content": (
@@ -62,17 +62,15 @@ knowledge_base = {
     }
 }
 
-
-# -------------------------
-# MODELE WEJŚCIA
-# -------------------------
+# -----------------------------------
+# MODELE
+# -----------------------------------
 class PostInput(BaseModel):
     text: str
 
-
-# -------------------------
-# FUNKCJA: WYSZUKIWANIE WIEDZY
-# -------------------------
+# -----------------------------------
+# WYSZUKIWANIE WIEDZY
+# -----------------------------------
 def search_knowledge(text: str):
     text_lower = text.lower()
     for key, data in knowledge_base.items():
@@ -80,13 +78,11 @@ def search_knowledge(text: str):
             return data
     return None
 
-
-# -------------------------
-# FUNKCJA: GENEROWANIE ODPOWIEDZI OPENAI
-# -------------------------
+# -----------------------------------
+# GENEROWANIE ODPOWIEDZI AI
+# -----------------------------------
 def generate_ai_reply(user_text: str, knowledge: dict | None):
     if knowledge:
-        # Odpowiedź oparta na bazie wiedzy Polonia Assist
         prompt = f"""
 Jesteś ekspertem Polonia Assist. Odpowiadasz rzeczowo, konkretnie, po polsku.
 Zawsze subtelnie podkreślasz, że Polonia Assist może pomóc w danym temacie.
@@ -104,7 +100,6 @@ UŻYTKOWNIK PYTA:
 ODPOWIEDŹ W STYLU POLONIA ASSIST:
 """
     else:
-        # Wersja robocza, gdy brak danych w bazie
         prompt = f"""
 Jesteś ekspertem Polonia Assist. Odpowiadasz rzeczowo, konkretnie, po polsku.
 Nie masz danych w bazie wiedzy, więc generujesz wersję roboczą odpowiedzi.
@@ -119,17 +114,18 @@ ODPOWIEDŹ ROBOCZA:
 
     response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
-        messages=[{"role": "system", "content": "Jesteś ekspertem Polonia Assist."},
-                  {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "Jesteś ekspertem Polonia Assist."},
+            {"role": "user", "content": prompt}
+        ],
         temperature=0.4
     )
 
     return response.choices[0].message["content"]
 
-
-# -------------------------
-# ENDPOINT GŁÓWNY
-# -------------------------
+# -----------------------------------
+# ENDPOINT ANALYZE
+# -----------------------------------
 @app.post("/analyze")
 def analyze_post(data: PostInput):
     knowledge = search_knowledge(data.text)
@@ -140,26 +136,28 @@ def analyze_post(data: PostInput):
         "agent_reply": reply,
         "source": knowledge["url"] if knowledge else None
     }
-from fastapi import Request
-import httpx
 
-VERIFY_TOKEN = os.getenv("FB_VERIFY_TOKEN")
-PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
-
-
-@app.get("/facebook/webhook")
+# -----------------------------------
+# FACEBOOK WEBHOOK (GET)
+# -----------------------------------
+@app.get("/webhook")
 async def verify_facebook(request: Request):
-    params = request.query_params
-    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == VERIFY_TOKEN:
-        return int(params.get("hub.challenge"))
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return int(challenge)
+
     return {"status": "error", "message": "Invalid verification token"}
 
-
-@app.post("/facebook/webhook")
+# -----------------------------------
+# FACEBOOK WEBHOOK (POST)
+# -----------------------------------
+@app.post("/webhook")
 async def facebook_webhook(request: Request):
     data = await request.json()
 
-    # Facebook wysyła różne typy eventów — interesują nas komentarze
     if "entry" in data:
         for entry in data["entry"]:
             if "changes" in entry:
@@ -170,15 +168,14 @@ async def facebook_webhook(request: Request):
                             comment_text = value["message"]
                             comment_id = value["comment_id"]
 
-                            # Generujemy odpowiedź przez nasz endpoint analyze
                             reply = generate_ai_reply(comment_text, search_knowledge(comment_text))
-
-                            # Wysyłamy odpowiedź na Facebooka
                             await send_facebook_reply(comment_id, reply)
 
     return {"status": "ok"}
 
-
+# -----------------------------------
+# WYSYŁANIE ODPOWIEDZI NA FACEBOOKA
+# -----------------------------------
 async def send_facebook_reply(comment_id: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
     params = {"access_token": PAGE_ACCESS_TOKEN}
@@ -186,10 +183,13 @@ async def send_facebook_reply(comment_id: str, message: str):
 
     async with httpx.AsyncClient() as client:
         await client.post(url, params=params, json=payload)
+
+# -----------------------------------
+# TEST CRON
+# -----------------------------------
 from cron import run_agent_cycle
 
 @app.get("/test-cron")
 def test_cron():
     run_agent_cycle()
     return {"status": "agent executed"}
-
